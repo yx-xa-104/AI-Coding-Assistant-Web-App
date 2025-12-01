@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="vi" class="h-full bg-gray-900">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Coding Assistant</title>
+    <!-- Tải Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .tab-active {
+                @apply bg-indigo-600 text-white;
+            }
+            .tab-inactive {
+                @apply text-gray-300 hover:bg-gray-700 hover:text-white;
+            }
+            /* Tùy chỉnh thanh cuộn cho webkit (Chrome, Safari) */
+            ::-webkit-scrollbar {
+                width: 6px;
+                height: 6px;
+            }
+            ::-webkit-scrollbar-track {
+                background: #2d3748; /* gray-800 */
+            }
+            ::-webkit-scrollbar-thumb {
+                background: #4a5568; /* gray-600 */
+                border-radius: 3px;
+            }
+            ::-webkit-scrollbar-thumb:hover {
+                background: #718096; /* gray-500 */
+            }
+        }
+    </style>
+    <!-- Monaco Editor Loader -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"></script>
+</head>
+<body class="h-full flex flex-col font-sans text-gray-200">
+
+    <!-- Header -->
+    <header class="bg-gray-800 shadow-md">
+        <div class="container mx-auto px-4 py-3">
+            <h1 class="text-xl font-bold text-white">AI Coding Assistant</h1>
+        </div>
+    </header>
+
+    <!-- Language Tabs -->
+    <nav class="bg-gray-800 border-b border-gray-700">
+        <div class="container mx-auto px-4">
+            <div class="flex space-x-1" id="tab-container">
+                <!-- Các tab sẽ được thêm bằng JS -->
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content: Editor vs Chat -->
+    <main class="flex-1 container mx-auto p-4 flex flex-col lg:flex-row gap-4 min-h-0">
+
+        <!-- Cột Bên trái: Code Editor -->
+        <div class="flex-1 flex flex-col bg-gray-800 rounded-lg shadow-lg overflow-hidden min-h-[400px] lg:min-h-0">
+            <div class="p-3 bg-gray-700 border-b border-gray-600">
+                <h2 class="text-lg font-semibold text-white">Trình soạn thảo Code</h2>
+            </div>
+            <!-- 3. Vùng chứa Monaco Editor -->
+            <div id="editor-container" class="flex-1 w-full h-full"></div>
+        </div>
+
+        <!-- Cột Bên phải: Chat -->
+        <div class="flex-1 flex flex-col bg-gray-800 rounded-lg shadow-lg overflow-hidden min-h-[400px] lg:min-h-0">
+            <!-- Khu vực hiển thị Chat -->
+            <div class="flex-1 p-4 overflow-y-auto space-y-4" id="chat-output">
+                <!-- Tin nhắn mẫu -->
+                <div class="flex">
+                    <div class="bg-indigo-600 text-white p-3 rounded-lg max-w-xs lg:max-w-md">
+                        <p class="text-sm">Xin chào! Dán code của bạn vào bên trái, chọn ngôn ngữ, và đặt câu hỏi cho tôi ở bên dưới.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Khu vực Nhập liệu -->
+            <div class="p-4 bg-gray-700 border-t border-gray-600">
+                <!-- Các nút hành động nhanh -->
+                <div class="flex flex-wrap gap-2 mb-3">
+                    <button onclick="handleQuickAction('Hãy giải thích đoạn code này')" class="px-3 py-1 bg-gray-600 hover:bg-gray-500 text-xs text-white rounded-full">Giải thích Code</button>
+                    <button onclick="handleQuickAction('Hãy tìm lỗi trong đoạn code này')" class="px-3 py-1 bg-gray-600 hover:bg-gray-500 text-xs text-white rounded-full">Tìm lỗi</button>
+                    <button onclick="handleQuickAction('Hãy tối ưu hóa đoạn code này')" class="px-3 py-1 bg-gray-600 hover:bg-gray-500 text-xs text-white rounded-full">Tối ưu hóa</button>
+                </div>
+                <!-- Ô nhập prompt -->
+                <div class="flex gap-2">
+                    <input type="text" id="prompt-input" class="flex-1 px-4 py-2 bg-gray-800 text-white border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Đặt câu hỏi của bạn...">
+                    <button id="submit-button" onclick="handleSubmit()" class="px-5 py-2 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-gray-800">
+                        Gửi
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        // --- Cấu hình các ngôn ngữ ---
+        const languages = {
+            'python': {
+                label: 'Python',
+                defaultCode: '# Chào mừng bạn đến với Python!\n\ndef hello():\n    print("Hello, World!")\n'
+            },
+            'csharp': {
+                label: 'C#',
+                defaultCode: '// Chào mừng bạn đến với C#!\n\nusing System;\n\npublic class Hello\n{\n    public static void Main(string[] args)\n    {\n        Console.WriteLine("Hello, World!");\n    }\n}\n'
+            },
+            'cpp': {
+                label: 'C++',
+                defaultCode: '// Chào mừng bạn đến với C++!\n\n#include <iostream>\n\nint main() {\n    std::cout << "Hello, World!" << std::endl;\n    return 0;\n}\n'
+            },
+            'javascript': {
+                label: 'JavaScript',
+                defaultCode: '// Chào mừng bạn đến với JavaScript!\n\nfunction hello() {\n    console.log("Hello, World!");\n}\n'
+            }
+        };
+
+        let monacoEditor;
+        let currentLanguage = 'python'; // Ngôn ngữ mặc định
+        const tabContainer = document.getElementById('tab-container');
+        const chatOutput = document.getElementById('chat-output');
+        const promptInput = document.getElementById('prompt-input');
+        const submitButton = document.getElementById('submit-button');
+
+        // --- Khởi tạo Monaco Editor ---
+        require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs' }});
+        require(['vs/editor/editor.main'], function() {
+            monacoEditor = monaco.editor.create(document.getElementById('editor-container'), {
+                value: languages[currentLanguage].defaultCode,
+                language: currentLanguage,
+                theme: 'vs-dark',
+                automaticLayout: true,
+                minimap: { enabled: false },
+                roundedSelection: true,
+                scrollBeyondLastLine: false,
+            });
+
+            // Khởi tạo các tab
+            initializeTabs();
+        });
+
+        // --- Logic xử lý Tab ---
+        function initializeTabs() {
+            Object.keys(languages).forEach(langId => {
+                const lang = languages[langId];
+                const tab = document.createElement('button');
+                tab.id = `tab-${langId}`;
+                tab.textContent = lang.label;
+                tab.className = 'px-4 py-2 rounded-t-lg text-sm font-medium focus:outline-none ' + (langId === currentLanguage ? 'tab-active' : 'tab-inactive');
+                tab.onclick = () => switchTab(langId);
+                tabContainer.appendChild(tab);
+            });
+        }
+
+        function switchTab(langId) {
+            if (langId === currentLanguage) return;
+
+            // Cập nhật trạng thái active của tab
+            document.getElementById(`tab-${currentLanguage}`).classList.replace('tab-active', 'tab-inactive');
+            document.getElementById(`tab-${langId}`).classList.replace('tab-inactive', 'tab-active');
+
+            currentLanguage = langId;
+
+            // Cập nhật Monaco Editor
+            monaco.editor.setModelLanguage(monacoEditor.getModel(), currentLanguage);
+            monacoEditor.setValue(languages[currentLanguage].defaultCode);
+            
+            // Xóa chat log (hoặc có thể giữ lại tùy logic)
+            chatOutput.innerHTML = '';
+            addMessageToChat('AI', `Đã chuyển sang chế độ ${languages[currentLanguage].label}. Dán code của bạn và đặt câu hỏi.`);
+        }
+        
+        // --- Logic Xử lý Chat ---
+        
+        // Hàm thêm tin nhắn vào UI
+        function addMessageToChat(sender, message) {
+            const messageElement = document.createElement('div');
+            messageElement.classList.add('flex', 'mb-3');
+            
+            let bubbleClass = '';
+            if (sender === 'user') {
+                bubbleClass = 'bg-gray-600 text-white ml-auto';
+            } else {
+                bubbleClass = 'bg-indigo-600 text-white';
+            }
+            
+            // Chuyển markdown đơn giản (như ```code```) thành HTML
+            message = message.replace(/```(.*?)```/gs, '<pre class="bg-gray-900 p-2 rounded-md my-2 overflow-x-auto text-sm"><code>$1</code></pre>');
+            message = message.replace(/`([^`]+)`/g, '<code class="bg-gray-900 px-1 rounded-sm text-sm">$1</code>');
+
+
+            messageElement.innerHTML = `
+                <div class="p-3 rounded-lg max-w-xs lg:max-w-md ${bubbleClass}">
+                    <div class="text-sm">${message}</div>
+                </div>
+            `;
+            chatOutput.appendChild(messageElement);
+            // Tự động cuộn xuống tin nhắn mới nhất
+            chatOutput.scrollTop = chatOutput.scrollHeight;
+        }
+
+        // Xử lý khi nhấn nút Gửi
+        async function handleSubmit() {
+            const prompt = promptInput.value.trim();
+            if (!prompt) return;
+
+            const code = monacoEditor.getValue();
+            addMessageToChat('user', prompt);
+            promptInput.value = '';
+            
+            // Hiển thị trạng thái đang tải
+            submitButton.disabled = true;
+            submitButton.textContent = 'Đang xử lý...';
+            const loadingMessage = document.createElement('div');
+            loadingMessage.id = 'loading-message';
+            loadingMessage.innerHTML = `<div class="p-3 rounded-lg max-w-xs lg:max-w-md bg-indigo-600 text-white"><div class="text-sm">AI đang suy nghĩ...</div></div>`;
+            chatOutput.appendChild(loadingMessage);
+            chatOutput.scrollTop = chatOutput.scrollHeight;
+
+
+            // --- QUAN TRỌNG: GỌI BACKEND (THAY URL) ---
+            const BACKEND_URL = 'https://your-backend-url.com/generate';
+
+            try {
+                const response = await fetch(BACKEND_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        language: currentLanguage,
+                        code: code,
+                        prompt: prompt
+                    })
+                });
+
+                chatOutput.removeChild(loadingMessage); // Xóa tin nhắn "đang suy nghĩ"
+
+                if (!response.ok) {
+                    throw new Error(`Lỗi từ server: ${response.statusText}`);
+                }
+
+                // Giả sử phản hồi là JSON
+                const data = await response.json();
+                
+                // Giả sử API trả về { "reply": "..." }
+                addMessageToChat('AI', data.reply || "Đã xảy ra lỗi khi xử lý phản hồi.");
+
+            } catch (error) {
+                console.error('Lỗi khi gọi API:', error);
+                if (document.getElementById('loading-message')) {
+                    chatOutput.removeChild(loadingMessage);
+                }
+                addMessageToChat('AI', `Xin lỗi, đã có lỗi xảy ra: ${error.message}. (Hãy chắc chắn bạn đã cập nhật BACKEND_URL trong code)`);
+            } finally {
+                submitButton.disabled = false;
+                submitButton.textContent = 'Gửi';
+            }
+        }
+        
+        // Xử lý khi nhấn Enter trong ô input
+        promptInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSubmit();
+            }
+        });
+
+        // Xử lý các nút hành động nhanh
+        function handleQuickAction(prompt) {
+            promptInput.value = prompt;
+            handleSubmit();
+        }
+
+    </script>
+</body>
+</html>
