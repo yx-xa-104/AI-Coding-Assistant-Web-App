@@ -1,98 +1,80 @@
 import express from 'express';
-import fetch from 'node-fetch'; 
+import fetch from 'node-fetch';
 import cors from 'cors';
-import 'dotenv/config'; 
+import 'dotenv/config';
 
 const app = express();
-const port = process.env.PORT || 3000; 
-
+const port = process.env.PORT || 3001; 
 
 app.use(cors());
 app.use(express.json());
 
-// --- Kiểm tra API Key ---
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-if (!OPENAI_API_KEY) {
-    console.error('LỖI: Không tìm thấy OPENAI_API_KEY trong file .env');
-    console.log('Hãy tạo file .env và thêm OPENAI_API_KEY=key_của_bạn');
-    process.exit(1); 
-}
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
-app.get('/', (req, res) => {
-    res.send('AI Assistant Backend đang chạy!');
+app.use((req, res, next) => {
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+    next();
 });
 
-// --- Xử lý yêu cầu tạo phản hồi từ AI ---
-app.post('/generate', async (req, res) => {
-    const { prompt, codeContext, language } = req.body;
+app.get('/', (req, res) => {
+    res.send(`AI Backend (Gemini) đang chạy trên cổng ${port}`);
+});
 
-    // 1. Kiểm tra dữ liệu đầu vào
-    if (!prompt || !codeContext || !language) {
-        return res.status(400).json({ error: 'Thiếu các trường: prompt, codeContext, hoặc language' });
+app.post('/generate', async (req, res) => {
+    console.log('--- Nhận Request (Gemini) ---');
+    
+    const { prompt, language, code, codeContext } = req.body;
+    const finalCode = codeContext || code || "";
+
+    if (!prompt || !finalCode) {
+        console.error('Lỗi: Thiếu prompt hoặc code');
+        return res.status(400).json({ error: 'Thiếu prompt hoặc code context' });
     }
-    // 2. Tạo system prompt động
-    const systemPrompt = `Bạn là một trợ lý lập trình chuyên gia về ${language}.
-    Người dùng đã cung cấp đoạn code sau từ trình soạn thảo của họ:
-    --- CODE HIỆN TẠI ---
-    ${codeContext}
-    --- HẾT CODE ---
+
+    // 1. Cấu trúc Prompt cho Gemini
+    const fullPrompt = `Bạn là chuyên gia lập trình ${language || 'đa ngôn ngữ'}.
+    Hãy trả lời câu hỏi sau đây dựa trên đoạn code được cung cấp.
     
-    Câu hỏi của người dùng là: "${prompt}"
-    
-    Hãy đưa ra câu trả lời hữu ích, súc tích và chính xác.
-    - Nếu giải thích, hãy rõ ràng.
-    - Nếu tìm lỗi, hãy chỉ ra chúng.
-    - Nếu tối ưu, hãy đề xuất thay đổi.
-    - Luôn sử dụng markdown (ví dụ: \`code\`) cho các đoạn code snippet.`;
+    --- CODE CONTEXT ---
+    ${finalCode}
+    --- END CODE ---
+
+    CÂU HỎI CỦA NGƯỜI DÙNG: ${prompt}`;
 
     try {
-        // 3. Gọi đến API của OpenAI
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        if (!GEMINI_API_KEY) throw new Error("Chưa cấu hình GEMINI_API_KEY trong file .env");
+
+        // 2. Gọi Google Gemini API
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${OPENAI_API_KEY}`
+                'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                model: 'gpt-3.5-turbo',
-                messages: [
-                    {
-                        role: 'system',
-                        content: systemPrompt
-                    },
-                    {
-                        role: 'user',
-                        content: prompt 
-                    }
-                ],
-                max_tokens: 1500, // Giới hạn độ dài phản hồi
+                contents: [{
+                    parts: [{ text: fullPrompt }]
+                }]
             })
         });
 
-        if (!response.ok) {
-            const errorBody = await response.text();
-            console.error('Lỗi từ OpenAI API:', errorBody);
-            throw new Error(`OpenAI API request thất bại: ${response.statusText}`);
-        }
-
         const data = await response.json();
         
-        // 4. Trích xuất và gửi phản hồi về cho frontend
-        const reply = data.choices[0]?.message?.content;
-        
-        if (reply) {
-            res.json({ reply: reply }); 
-        } else {
-            res.status(500).json({ error: 'Không nhận được phản hồi hợp lệ từ AI.' });
+        // Xử lý lỗi từ Google trả về
+        if (data.error) {
+            throw new Error(data.error.message);
         }
 
+        // 3. Phân tích kết quả từ JSON của Gemini
+        const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || "Gemini không phản hồi.";
+        
+        res.json({ reply });
+
     } catch (error) {
-        console.error('Lỗi nghiêm trọng tại /generate:', error);
-        res.status(500).json({ error: 'Lỗi máy chủ nội bộ.' });
+        console.error('Gemini Error:', error.message);
+        res.status(500).json({ error: `Lỗi Gemini: ${error.message}` });
     }
 });
 
-// --- Khởi động máy chủ ---
 app.listen(port, () => {
-    console.log(`Backend server đang lắng nghe tại http://localhost:${port}`);
+    console.log(`✅ Server (Gemini) đang chạy tại: http://localhost:${port}`);
 });
