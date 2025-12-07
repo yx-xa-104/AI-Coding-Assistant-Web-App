@@ -3,262 +3,307 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Coding Assistant</title>
+    <title>AI Coding Assistant (Streaming)</title>
+    <!-- Tailwind CSS: Framework CSS để làm giao diện nhanh -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <style type="text/tailwindcss">
-        @layer utilities {
-            .tab-active {
-                @apply bg-indigo-600 text-white;
-            }
-            .tab-inactive {
-                @apply text-gray-300 hover:bg-gray-700 hover:text-white;
-            }
-            ::-webkit-scrollbar {
-                width: 6px;
-                height: 6px;
-            }
-            ::-webkit-scrollbar-track {
-                background: #2d3748; 
-            }
-            ::-webkit-scrollbar-thumb {
-                background: #4a5568; 
-                border-radius: 3px;
-            }
-            ::-webkit-scrollbar-thumb:hover {
-                background: #718096; 
-            }
-        }
-    </style>
+    
+    <!-- Monaco Editor: Trình soạn thảo giống VS Code -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"></script>
+    
+    <!-- Marked: Thư viện để chuyển đổi Markdown sang HTML -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+    <style>
+        /* Tùy chỉnh thanh cuộn */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #1a202c; }
+        ::-webkit-scrollbar-thumb { background: #4a5568; border-radius: 4px; }
+        
+        /* Style cho nội dung Markdown trong khung chat */
+        .markdown-body p { margin-bottom: 0.5em; line-height: 1.6; }
+        .markdown-body pre { background: #111827; padding: 12px; border-radius: 8px; overflow-x: auto; margin-top: 8px; border: 1px solid #374151; }
+        .markdown-body code { font-family: 'Fira Code', monospace; color: #e2e8f0; font-size: 0.9em; }
+        .markdown-body strong { color: #818cf8; font-weight: 700; }
+        
+        /* Hiệu ứng nhấp nháy cho con trỏ khi đang gõ */
+        .cursor-blink { display: inline-block; width: 6px; height: 16px; background-color: #818cf8; animation: blink 1s infinite; vertical-align: middle; margin-left: 2px; }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+        
+        .tab-active { @apply bg-indigo-600 text-white border-indigo-500; }
+        .tab-inactive { @apply text-gray-400 hover:bg-gray-800 hover:text-white border-transparent; }
+    </style>
 </head>
-<body class="h-full flex flex-col font-sans text-gray-200">
+<body class="h-full flex flex-col font-sans text-gray-200 bg-gray-900 overflow-hidden">
 
     <!-- Header -->
-    <header class="bg-gray-800 shadow-md">
-        <div class="container mx-auto px-4 py-3">
-            <h1 class="text-xl font-bold text-white">AI Coding Assistant</h1>
+    <header class="bg-gray-800 border-b border-gray-700 h-14 flex items-center justify-between px-4 shrink-0 z-10">
+        <div class="flex items-center gap-3">
+            <div class="w-8 h-8 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center shadow-lg font-bold text-white">AI</div>
+            <h1 class="text-lg font-bold text-white tracking-wide">Coding Assistant <span class="text-xs text-indigo-300 bg-indigo-900/30 px-2 py-0.5 rounded ml-2">Day 4: Streaming</span></h1>
+        </div>
+        <!-- Đèn trạng thái kết nối -->
+        <div class="flex items-center gap-2 px-3 py-1 bg-gray-900 rounded-full border border-gray-700">
+            <div id="connection-status" class="w-2 h-2 rounded-full bg-yellow-500 animate-pulse"></div>
+            <span id="connection-text" class="text-xs text-gray-400 font-medium">Checking...</span>
         </div>
     </header>
 
-    <!-- Language Tabs -->
-    <nav class="bg-gray-800 border-b border-gray-700">
-        <div class="container mx-auto px-4">
-            <div class="flex space-x-1" id="tab-container">            
-            </div>
+    <!-- Tabs Ngôn ngữ -->
+    <nav class="bg-gray-800 border-b border-gray-700 shrink-0">
+        <div class="container mx-auto px-4 flex space-x-1 pt-2" id="tab-container">
+            <!-- Tabs sẽ được tạo bằng JS -->
         </div>
     </nav>
 
-    <!-- Main Content: Editor vs Chat -->
-    <main class="flex-1 container mx-auto p-4 flex flex-col lg:flex-row gap-4 min-h-0">
-
-        <div class="flex-1 flex flex-col bg-gray-800 rounded-lg shadow-lg overflow-hidden min-h-[400px] lg:min-h-0">
-            <div class="p-3 bg-gray-700 border-b border-gray-600">
-                <h2 class="text-lg font-semibold text-white">Trình soạn thảo Code</h2>
+    <!-- Nội dung chính -->
+    <main class="flex-1 flex flex-col lg:flex-row overflow-hidden">
+        <!-- Cột Trái: Code Editor -->
+        <div class="flex-1 lg:flex-[6] flex flex-col border-r border-gray-700 min-h-[300px]">
+             <div class="bg-gray-800 px-4 py-2 border-b border-gray-700 flex justify-between items-center">
+                <span class="text-xs font-medium text-gray-400 uppercase tracking-wider">Editor</span>
+                <button onclick="copyCode()" class="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1 transition-colors">
+                    Copy Code
+                </button>
             </div>
-            <div id="editor-container" class="flex-1 w-full h-full"></div>
+            <div id="editor-container" class="flex-1 bg-[#1e1e1e]"></div>
         </div>
 
-        <div class="flex-1 flex flex-col bg-gray-800 rounded-lg shadow-lg overflow-hidden min-h-[400px] lg:min-h-0">
-            <!-- Khu vực hiển thị Chat -->
-            <div class="flex-1 p-4 overflow-y-auto space-y-4" id="chat-output">
-                <!-- Tin nhắn mẫu -->
-                <div class="flex">
-                    <div class="bg-indigo-600 text-white p-3 rounded-lg max-w-xs lg:max-w-md">
-                        <p class="text-sm">Xin chào! Dán code của bạn vào bên trái, chọn ngôn ngữ, và đặt câu hỏi cho tôi ở bên dưới.</p>
-                    </div>
+        <!-- Cột Phải: Chat Interface -->
+        <div class="flex-1 flex flex-col bg-gray-850 min-h-[400px] lg:flex-[4]">
+            <!-- Khu vực hiển thị tin nhắn -->
+            <div class="flex-1 p-4 overflow-y-auto space-y-4 scroll-smooth" id="chat-output">
+                <!-- Tin nhắn chào mừng -->
+                <div class="bg-gray-800 p-4 rounded-xl border border-gray-700 shadow-sm max-w-[90%]">
+                    <p class="font-medium text-indigo-400 mb-1">👋 Xin chào!</p>
+                    <p class="text-sm text-gray-300">Hệ thống đã được nâng cấp lên chế độ <strong>Streaming</strong>. Câu trả lời sẽ xuất hiện ngay lập tức giống như ChatGPT.</p>
                 </div>
             </div>
-
-            <!-- Khu vực Nhập liệu -->
-            <div class="p-4 bg-gray-700 border-t border-gray-600">
-                <!-- Các nút hành động nhanh -->
-                <div class="flex flex-wrap gap-2 mb-3">
-                    <button onclick="handleQuickAction('Hãy giải thích đoạn code này')" class="px-3 py-1 bg-gray-600 hover:bg-gray-500 text-xs text-white rounded-full">Giải thích Code</button>
-                    <button onclick="handleQuickAction('Hãy tìm lỗi trong đoạn code này')" class="px-3 py-1 bg-gray-600 hover:bg-gray-500 text-xs text-white rounded-full">Tìm lỗi</button>
-                    <button onclick="handleQuickAction('Hãy tối ưu hóa đoạn code này')" class="px-3 py-1 bg-gray-600 hover:bg-gray-500 text-xs text-white rounded-full">Tối ưu hóa</button>
+            
+            <!-- Khu vực nhập liệu -->
+            <div class="p-4 bg-gray-800 border-t border-gray-700 shrink-0 z-20">
+                <!-- Quick Actions -->
+                <div class="flex gap-2 mb-3 overflow-x-auto pb-1" id="quick-actions">
+                    <button onclick="setPrompt('Giải thích chi tiết đoạn code này')" class="whitespace-nowrap px-3 py-1.5 bg-gray-700 hover:bg-gray-600 border border-gray-600 text-xs text-gray-300 rounded-full transition-all">Giải thích</button>
+                    <button onclick="setPrompt('Tìm lỗi (bugs) trong đoạn code này')" class="whitespace-nowrap px-3 py-1.5 bg-gray-700 hover:bg-gray-600 border border-gray-600 text-xs text-gray-300 rounded-full transition-all">Tìm lỗi</button>
+                    <button onclick="setPrompt('Viết Unit Test cho code này')" class="whitespace-nowrap px-3 py-1.5 bg-gray-700 hover:bg-gray-600 border border-gray-600 text-xs text-gray-300 rounded-full transition-all">Unit Test</button>
                 </div>
-                <!-- Ô nhập prompt -->
-                <div class="flex gap-2">
-                    <input type="text" id="prompt-input" class="flex-1 px-4 py-2 bg-gray-800 text-white border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Đặt câu hỏi của bạn...">
-                    <button id="submit-button" onclick="handleSubmit()" class="px-5 py-2 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-gray-800">
-                        Gửi
+                
+                <div class="relative">
+                    <textarea id="prompt-input" rows="1" class="w-full bg-gray-900 text-white border border-gray-600 rounded-xl pl-4 pr-12 py-3 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 resize-none overflow-hidden text-sm" placeholder="Hỏi AI về code của bạn..." style="min-height: 48px;"></textarea>
+                    <button id="submit-button" onclick="handleSend()" class="absolute right-2 bottom-2 p-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                        </svg>
                     </button>
                 </div>
             </div>
         </div>
-
     </main>
 
     <script>
-        // --- Cấu hình các ngôn ngữ ---
-        const languages = {
-            'python': {
-                label: 'Python',
-                defaultCode: '# Chào mừng bạn đến với Python!\n\ndef hello():\n    print("Hello, World!")\n'
-            },
-            'csharp': {
-                label: 'C#',
-                defaultCode: '// Chào mừng bạn đến với C#!\n\nusing System;\n\npublic class Hello\n{\n    public static void Main(string[] args)\n    {\n        Console.WriteLine("Hello, World!");\n    }\n}\n'
-            },
-            'cpp': {
-                label: 'C++',
-                defaultCode: '// Chào mừng bạn đến với C++!\n\n#include <iostream>\n\nint main() {\n    std::cout << "Hello, World!" << std::endl;\n    return 0;\n}\n'
-            },
-            'javascript': {
-                label: 'JavaScript',
-                defaultCode: '// Chào mừng bạn đến với JavaScript!\n\nfunction hello() {\n    console.log("Hello, World!");\n}\n'
+        // --- 1. CẤU HÌNH ỨNG DỤNG ---
+        const CONFIG = {
+            API_URL: 'http://localhost:3001', // Cổng backend streaming
+            LANGUAGES: {
+                'python': { label: 'Python', icon: '🐍', default: 'def quick_sort(arr):\n    if len(arr) <= 1: return arr\n    pivot = arr[len(arr) // 2]\n    left = [x for x in arr if x < pivot]\n    middle = [x for x in arr if x == pivot]\n    right = [x for x in arr if x > pivot]\n    return quick_sort(left) + middle + quick_sort(right)' },
+                'javascript': { label: 'JavaScript', icon: '📜', default: 'function fibonacci(n) {\n  if (n <= 1) return n;\n  return fibonacci(n - 1) + fibonacci(n - 2);\n}' },
+                'cpp': { label: 'C++', icon: '⚙️', default: '#include <iostream>\n\nint main() {\n    std::cout << "Hello Streaming!" << std::endl;\n    return 0;\n}' }
             }
         };
 
-        let monacoEditor;
-        let currentLanguage = 'python'; // Ngôn ngữ mặc định
-        const tabContainer = document.getElementById('tab-container');
-        const chatOutput = document.getElementById('chat-output');
-        const promptInput = document.getElementById('prompt-input');
-        const submitButton = document.getElementById('submit-button');
+        let editor;
+        let currentLang = 'javascript';
+        let currentAiMessageDiv = null;
 
-        // --- Khởi tạo Monaco Editor ---
+        // --- 2. KHỞI TẠO MONACO EDITOR ---
         require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs' }});
-        require(['vs/editor/editor.main'], function() {
-            monacoEditor = monaco.editor.create(document.getElementById('editor-container'), {
-                value: languages[currentLanguage].defaultCode,
-                language: currentLanguage,
+        require(['vs/editor/editor.main'], () => {
+            editor = monaco.editor.create(document.getElementById('editor-container'), {
+                value: CONFIG.LANGUAGES[currentLang].default,
+                language: currentLang,
                 theme: 'vs-dark',
+                fontSize: 14,
+                fontFamily: "'Fira Code', Consolas, monospace",
                 automaticLayout: true,
                 minimap: { enabled: false },
-                roundedSelection: true,
-                scrollBeyondLastLine: false,
+                padding: { top: 16 }
             });
-
-            // Khởi tạo các tab
-            initializeTabs();
+            renderTabs();
         });
 
-        // --- Logic xử lý Tab ---
-        function initializeTabs() {
-            Object.keys(languages).forEach(langId => {
-                const lang = languages[langId];
-                const tab = document.createElement('button');
-                tab.id = `tab-${langId}`;
-                tab.textContent = lang.label;
-                tab.className = 'px-4 py-2 rounded-t-lg text-sm font-medium focus:outline-none ' + (langId === currentLanguage ? 'tab-active' : 'tab-inactive');
-                tab.onclick = () => switchTab(langId);
-                tabContainer.appendChild(tab);
+        function renderTabs() {
+            const container = document.getElementById('tab-container');
+            container.innerHTML = '';
+            Object.keys(CONFIG.LANGUAGES).forEach(lang => {
+                const btn = document.createElement('button');
+                const isActive = lang === currentLang;
+                // Style cho tab
+                btn.className = `px-4 py-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${isActive ? 'bg-indigo-600 text-white border-indigo-500' : 'text-gray-400 hover:bg-gray-800 hover:text-white border-transparent'}`;
+                btn.innerHTML = `<span>${CONFIG.LANGUAGES[lang].icon}</span> ${CONFIG.LANGUAGES[lang].label}`;
+                
+                btn.onclick = () => {
+                    currentLang = lang;
+                    editor.setModelLanguage(editor.getModel(), lang);
+                    editor.setValue(CONFIG.LANGUAGES[lang].default);
+                    renderTabs();
+                };
+                container.appendChild(btn);
             });
         }
 
-        function switchTab(langId) {
-            if (langId === currentLanguage) return;
+        // --- 3. LOGIC CHAT STREAMING ---
 
-            // Cập nhật trạng thái active của tab
-            document.getElementById(`tab-${currentLanguage}`).classList.replace('tab-active', 'tab-inactive');
-            document.getElementById(`tab-${langId}`).classList.replace('tab-inactive', 'tab-active');
-
-            currentLanguage = langId;
-
-            monaco.editor.setModelLanguage(monacoEditor.getModel(), currentLanguage);
-            monacoEditor.setValue(languages[currentLanguage].defaultCode);
+        // Hàm thêm tin nhắn vào giao diện
+        function addMessage(role, text = '') {
+            const output = document.getElementById('chat-output');
+            const div = document.createElement('div');
+            const isUser = role === 'user';
             
-            // Xóa chat log
-            chatOutput.innerHTML = '';
-            addMessageToChat('AI', `Đã chuyển sang chế độ ${languages[currentLanguage].label}. Dán code của bạn và đặt câu hỏi.`);
-        }
-        
-        // --- Logic Xử lý Chat ---
-        function addMessageToChat(sender, message) {
-            const messageElement = document.createElement('div');
-            messageElement.classList.add('flex', 'mb-3');
+            div.className = 'flex gap-3 animate-fade-in mb-4';
             
-            let bubbleClass = '';
-            if (sender === 'user') {
-                bubbleClass = 'bg-gray-600 text-white ml-auto';
-            } else {
-                bubbleClass = 'bg-indigo-600 text-white';
-            }
+            // Avatar
+            const avatar = isUser 
+                ? '' 
+                : `<div class="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center shrink-0 text-white font-bold text-xs mt-1">AI</div>`;
 
-            // Xử lý định dạng code trong tin nhắn
-            message = message.replace(/```(.*?)```/gs, '<pre class="bg-gray-900 p-2 rounded-md my-2 overflow-x-auto text-sm"><code>$1</code></pre>');
-            message = message.replace(/`([^`]+)`/g, '<code class="bg-gray-900 px-1 rounded-sm text-sm">$1</code>');
+            // Nội dung tin nhắn
+            const contentClass = isUser
+                ? 'bg-gray-700 ml-auto text-white'
+                : 'bg-gray-800 border border-gray-700 text-gray-200 markdown-body w-full';
 
-
-            messageElement.innerHTML = `
-                <div class="p-3 rounded-lg max-w-xs lg:max-w-md ${bubbleClass}">
-                    <div class="text-sm">${message}</div>
+            div.innerHTML = `
+                ${avatar}
+                <div class="${contentClass} p-3 rounded-2xl ${isUser ? 'rounded-tr-none' : 'rounded-tl-none'} text-sm shadow-md max-w-[90%]">
+                    ${isUser ? text : '<span class="cursor-blink"></span>'}
                 </div>
             `;
-            chatOutput.appendChild(messageElement);
-            chatOutput.scrollTop = chatOutput.scrollHeight;
+            
+            output.appendChild(div);
+            output.scrollTop = output.scrollHeight;
+            
+            // Nếu là AI, trả về phần tử chứa nội dung (div con) để update text sau này
+            if (!isUser) {
+                return div.querySelector('.markdown-body');
+            }
         }
 
-        // Xử lý khi nhấn nút Gửi
-        async function handleSubmit() {
-            const prompt = promptInput.value.trim();
+        // Hàm xử lý khi bấm Gửi
+        async function handleSend() {
+            const input = document.getElementById('prompt-input');
+            const btn = document.getElementById('submit-button');
+            const prompt = input.value.trim();
             if (!prompt) return;
 
-            const code = monacoEditor.getValue();
-            addMessageToChat('user', prompt);
-            promptInput.value = '';
-            
-            // Hiển thị trạng thái đang tải
-            submitButton.disabled = true;
-            submitButton.textContent = 'Đang xử lý...';
-            const loadingMessage = document.createElement('div');
-            loadingMessage.id = 'loading-message';
-            loadingMessage.innerHTML = `<div class="p-3 rounded-lg max-w-xs lg:max-w-md bg-indigo-600 text-white"><div class="text-sm">AI đang suy nghĩ...</div></div>`;
-            chatOutput.appendChild(loadingMessage);
-            chatOutput.scrollTop = chatOutput.scrollHeight;
+            // 1. Hiển thị tin nhắn User
+            addMessage('user', prompt);
+            input.value = '';
+            input.style.height = '48px'; // Reset chiều cao textarea
+            btn.disabled = true;
+            btn.classList.add('opacity-50', 'cursor-not-allowed');
 
+            // 2. Tạo khung tin nhắn AI (rỗng) để chuẩn bị nhận Stream
+            currentAiMessageDiv = addMessage('ai'); 
 
-            // GỌI BACKEND API
-            const BACKEND_URL = 'http://localhost:3001/generate';
-            
             try {
-                const response = await fetch(BACKEND_URL, {
+                // Gọi Backend
+                const response = await fetch(`${CONFIG.API_URL}/generate`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        language: currentLanguage,
-                        code: code,
-                        prompt: prompt
+                        prompt: prompt,
+                        codeContext: editor.getValue(),
+                        language: currentLang
                     })
                 });
 
-                chatOutput.removeChild(loadingMessage); 
-
                 if (!response.ok) {
-                    throw new Error(`Lỗi từ server: ${response.statusText}`);
+                    const err = await response.json();
+                    throw new Error(err.error || response.statusText);
                 }
 
-                const data = await response.json();
+                // 3. XỬ LÝ STREAM
+                // Lấy reader để đọc luồng dữ liệu
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let accumulatedText = ""; // Biến tích lũy toàn bộ văn bản nhận được
+
+                while (true) {
+                    // Đọc chunk tiếp theo
+                    const { done, value } = await reader.read();
+                    
+                    if (done) break;
+
+                    // Giải mã chunk (từ byte sang string)
+                    const chunk = decoder.decode(value, { stream: true });
+                    accumulatedText += chunk;
+
+                    currentAiMessageDiv.innerHTML = marked.parse(accumulatedText) + '<span class="cursor-blink"></span>';
+                    
+                    const output = document.getElementById('chat-output');
+                    output.scrollTop = output.scrollHeight;
+                }
                 
-                addMessageToChat('AI', data.reply || "Đã xảy ra lỗi khi xử lý phản hồi.");
+                // Xóa con trỏ nhấp nháy khi xong
+                const cursor = currentAiMessageDiv.querySelector('.cursor-blink');
+                if(cursor) cursor.remove();
 
-            } catch (error) {
-                console.error('Lỗi khi gọi API:', error);
-                if (document.getElementById('loading-message')) {
-                    chatOutput.removeChild(loadingMessage);
+            } catch (err) {
+                if (currentAiMessageDiv) {
+                    currentAiMessageDiv.innerHTML += `<div class="mt-2 p-2 bg-red-900/30 border border-red-700 text-red-200 rounded text-xs">⚠️ Lỗi: ${err.message}</div>`;
                 }
-                addMessageToChat('AI', `Xin lỗi, đã có lỗi xảy ra: ${error.message}. (Hãy cập nhật BACKEND_URL)`);
             } finally {
-                submitButton.disabled = false;
-                submitButton.textContent = 'Gửi';
+                btn.disabled = false;
+                btn.classList.remove('opacity-50', 'cursor-not-allowed');
             }
         }
-        
-        // Xử lý khi nhấn Enter trong ô input
-        promptInput.addEventListener('keydown', (e) => {
+
+        // --- 4. CÁC TIỆN ÍCH KHÁC ---
+
+        // Auto-resize textarea khi gõ
+        const textarea = document.getElementById('prompt-input');
+        textarea.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = (this.scrollHeight) + 'px';
+            if(this.value === '') this.style.height = '48px';
+        });
+
+        // Xử lý phím Enter
+        textarea.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                handleSubmit();
+                handleSend();
             }
         });
 
-        // Xử lý các nút hành động nhanh
-        function handleQuickAction(prompt) {
-            promptInput.value = prompt;
-            handleSubmit();
+        // Hàm cho các nút hành động nhanh
+        function setPrompt(text) {
+            textarea.value = text;
+            handleSend();
         }
 
+        function copyCode() {
+            navigator.clipboard.writeText(editor.getValue());
+            alert('Đoạn code đã được sao chép vào clipboard!');
+        }
+
+        // Kiểm tra sức khỏe Server định kỳ (Health Check)
+        async function checkHealth() {
+            const dot = document.getElementById('connection-status');
+            const text = document.getElementById('connection-text');
+            try {
+                await fetch(`${CONFIG.API_URL}/`);
+                dot.className = "w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]";
+                text.innerText = "Online";
+                text.className = "text-xs text-green-400 font-bold";
+            } catch {
+                dot.className = "w-2 h-2 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]";
+                text.innerText = "Offline";
+                text.className = "text-xs text-red-400 font-bold";
+            }
+        }
+        setInterval(checkHealth, 5000); // Check mỗi 5 giây
+        checkHealth(); // Check ngay khi mở
+        
     </script>
 </body>
 </html>
