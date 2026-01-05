@@ -1,6 +1,6 @@
 import express from 'express';
 import cors from 'cors';
-import { GoogleGenerativeAI } from '@google/generative-ai'; // Thư viện Google
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import 'dotenv/config';
 
 const app = express();
@@ -9,7 +9,6 @@ const port = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
-// Khởi tạo Google AI Client
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 app.get('/', (req, res) => res.send('AI Backend (Streaming Mode) is Ready!'));
@@ -20,13 +19,13 @@ app.post('/generate', async (req, res) => {
 
     if (!prompt) return res.status(400).json({ error: 'Thiếu prompt' });
 
-    // Thiết lập Header
+
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
     res.setHeader('Transfer-Encoding', 'chunked');
 
     try {
-        // Chọn Model Gemini-pro
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        console.log("Using model: gemini-2.0-flash-exp");
+        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
 
         const fullPrompt = `Bạn là chuyên gia lập trình ${language || 'đa ngôn ngữ'}.
         Code context:
@@ -34,10 +33,8 @@ app.post('/generate', async (req, res) => {
         
         Yêu cầu: ${prompt}`;
 
-        // Gọi hàm stream
         const result = await model.generateContentStream(fullPrompt);
 
-        // Vòng lặp đọc từng mảnh dữ liệu
         for await (const chunk of result.stream) {
             const chunkText = chunk.text();
             res.write(chunkText);
